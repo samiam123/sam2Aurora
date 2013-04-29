@@ -249,7 +249,10 @@ namespace Simple.Currency
                 FromOSD(osdMap);
         }
 
-        public UserCurrency(List<string> queryResults)
+        public UserCurrency()
+        {
+
+        /*public UserCurrency(List<string> queryResults)
         {
            FromArray(queryResults);
         }
@@ -262,6 +265,7 @@ namespace Simple.Currency
             Tier = tier_bal;
             IsGroup = group_toggle;
             StipendsBalance = stipend_bal;
+        */
         }
 
         /// <summary></summary>

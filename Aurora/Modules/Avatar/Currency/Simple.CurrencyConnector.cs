@@ -94,16 +94,18 @@ namespace Simple.Currency
                                                                                 andFilters = where
                                                                             }, null, null, null);
 
-            UserCurrency currency;
+            UserCurrency currency = new UserCurrency();
+            //UserCurrency currency;
 
             if (query.Count == 0)
             {
-                currency = new UserCurrency(agentId, 0, 0, 0, false, 0);
+                //currency = new UserCurrency(agentId, 0, 0, 0, false, 0);
                 UserCurrencyCreate(agentId);
                 return currency;
             }
-            
-            return new UserCurrency(query);
+            currency.FromArray(query);
+            return currency; 
+            //return new UserCurrency(query);
         }
 
         [CanBeReflected(ThreatLevel = ThreatLevel.Low)]
