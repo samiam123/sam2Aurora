@@ -48,11 +48,8 @@ namespace Aurora.Framework.Servers.HttpServer
 
         protected HttpListenerManager m_internalServer;
         protected Dictionary<string, XmlRpcMethod> m_rpcHandlers = new Dictionary<string, XmlRpcMethod>();
-
+        
         protected Dictionary<string, IStreamedRequestHandler> m_streamHandlers =
-            new Dictionary<string, IStreamedRequestHandler>();
-
-        protected Dictionary<string, IStreamedRequestHandler> m_HTTPStreamHandlers =
             new Dictionary<string, IStreamedRequestHandler>();
 
         protected Dictionary<string, PollServiceEventArgs> m_pollHandlers =
@@ -160,23 +157,6 @@ namespace Aurora.Framework.Servers.HttpServer
             return true;
         }
 
-        public bool AddHTTPHandler(IStreamedRequestHandler handler)
-        {
-            //MainConsole.Instance.DebugFormat("[BASE HTTP SERVER]: Registering {0}", methodName);
-
-            lock (m_HTTPStreamHandlers)
-            {
-                if (!m_HTTPStreamHandlers.ContainsKey(handler.Path))
-                {
-                    m_HTTPStreamHandlers.Add(handler.Path, handler);
-                    return true;
-                }
-            }
-
-            //must already have a handler for that path so return false
-            return false;
-        }
-
         public bool AddPollServiceHTTPHandler(string methodName, PollServiceEventArgs args)
         {
             lock (m_pollHandlers)
@@ -253,50 +233,6 @@ namespace Aurora.Framework.Servers.HttpServer
             }
         }
 
-        /// <summary>
-        ///     Checks if we have an Exact path in the HTTP handlers for the path provided
-        /// </summary>
-        /// <param name="path">URI of the request</param>
-        /// <returns>true if we have one, false if not</returns>
-        internal bool DoWeHaveAHTTPHandler(string path)
-        {
-            string[] pathbase = path.Split('/');
-            string searchquery = "/";
-
-            if (pathbase.Length < 1)
-                return false;
-
-            for (int i = 1; i < pathbase.Length; i++)
-            {
-                searchquery += pathbase[i];
-                if (pathbase.Length - 1 != i)
-                    searchquery += "/";
-            }
-
-            string bestMatch = null;
-
-            //MainConsole.Instance.DebugFormat("[BASE HTTP HANDLER]: Checking if we have an HTTP handler for {0}", searchquery);
-
-            lock (m_HTTPStreamHandlers)
-            {
-                foreach (string pattern in m_HTTPStreamHandlers.Keys)
-                {
-                    if (searchquery.StartsWith(pattern) && searchquery.Length >= pattern.Length)
-                    {
-                        bestMatch = pattern;
-                    }
-                }
-
-                return !String.IsNullOrEmpty(bestMatch);
-            }
-        }
-
-        internal bool TryGetXMLHandler(string methodName, out XmlRpcMethod handler)
-        {
-            lock (m_rpcHandlers)
-                return m_rpcHandlers.TryGetValue(methodName, out handler);
-        }
-
         public XmlRpcMethod GetXmlRPCHandler(string method)
         {
             lock (m_rpcHandlers)
@@ -306,35 +242,6 @@ namespace Aurora.Framework.Servers.HttpServer
                     return m_rpcHandlers[method];
                 }
                 return null;
-            }
-        }
-
-        internal bool TryGetStreamHTTPHandler(string handlerKey, out IStreamedRequestHandler handle)
-        {
-            string bestMatch = null;
-
-            lock (m_HTTPStreamHandlers)
-            {
-                if (m_HTTPStreamHandlers.TryGetValue(handlerKey, out handle))
-                    return true;
-                foreach (string pattern in m_HTTPStreamHandlers.Keys)
-                {
-                    if (handlerKey.StartsWith(pattern))
-                    {
-                        if (String.IsNullOrEmpty(bestMatch) || pattern.Length > bestMatch.Length)
-                        {
-                            bestMatch = pattern;
-                        }
-                    }
-                }
-
-                if (String.IsNullOrEmpty(bestMatch))
-                {
-                    handle = null;
-                    return false;
-                }
-                handle = m_HTTPStreamHandlers[bestMatch];
-                return true;
             }
         }
 
@@ -448,64 +355,33 @@ namespace Aurora.Framework.Servers.HttpServer
                 string handlerKey = GetHandlerKey(request.HttpMethod, path);
                 byte[] buffer = null;
 
-                if (TryGetStreamHandler(handlerKey, out requestHandler))
+                if ((request.ContentType == "application/xml" || request.ContentType == "text/xml") && GetXmlRPCHandler(request.RawUrl) != null)
+                {
+                    buffer = HandleXmlRpcRequests(req, resp);
+                }
+                else if (TryGetStreamHandler(handlerKey, out requestHandler))
                 {
                     response.ContentType = requestHandler.ContentType;
-                        // Lets do this defaulting before in case handler has varying content type.
+                    // Lets do this defaulting before in case handler has varying content type.
 
                     buffer = requestHandler.Handle(path, request.InputStream, req, resp);
                 }
-                else
-                {
-                    switch (request.ContentType)
-                    {
-                        case null:
-                        case "text/html":
-                            buffer = HandleHTTPRequest(req, resp);
-                            break;
-
-                        case "text/xml":
-                        case "application/xml":
-                        case "application/json":
-                        default:
-                            //MainConsole.Instance.Info("[Debug BASE HTTP SERVER]: in default handler");
-                            // Point of note..  the DoWeHaveA methods check for an EXACT path
-                            //                        if (request.RawUrl.Contains("/CAPS/EQG"))
-                            //                        {
-                            //                            int i = 1;
-                            //                        }
-                            //MainConsole.Instance.Info("[Debug BASE HTTP SERVER]: Checking for LLSD Handler");
-                            if (GetXmlRPCHandler(request.RawUrl) != null)
-                            {
-                                // generic login request.
-                                buffer = HandleXmlRpcRequests(req, resp);
-                            }
-                                //                        MainConsole.Instance.DebugFormat("[BASE HTTP SERVER]: Checking for HTTP Handler for request {0}", request.RawUrl);
-                            else if (DoWeHaveAHTTPHandler(request.RawUrl))
-                        {
-                                buffer = HandleHTTPRequest(req, resp);
-                            }
-                            else
-                            {
-                                // generic login request.
-                                buffer = HandleXmlRpcRequests(req, resp);
-                            }
-
-                            break;
-                    }
-                }
 
                 request.InputStream.Close();
-
                 try
                 {
                     if (buffer != null)
                     {
-                        response.ContentLength64 = buffer.LongLength;
-                        response.Close(buffer, true);
+                        response.SendChunked = true;
+                        using (Stream stream = response.OutputStream)
+                        {
+                            HttpServerHandlerHelpers.WriteChunked(stream, buffer);
+                        }
+                        //response.ContentLength64 = buffer.LongLength;
+                        response.Close();
                     }
                     else
-                        response.Close ();
+                        response.Close (new byte[0], true);
                 }
                 catch(Exception ex)
                 {
@@ -518,7 +394,7 @@ namespace Aurora.Framework.Servers.HttpServer
             catch (Exception e)
             {
                 MainConsole.Instance.ErrorFormat("[BASE HTTP SERVER]: HandleRequest() threw {0} ", e.ToString());
-                response.Close(new byte[0], false);
+                response.Abort();
             }
             finally
             {
@@ -544,50 +420,6 @@ namespace Aurora.Framework.Servers.HttpServer
             }
         }
 
-        public byte[] HandleHTTPRequest(OSHttpRequest request, OSHttpResponse response)
-        {
-            if (request.HttpMethod == "OPTIONS")
-            {
-                response.StatusCode = (int) HttpStatusCode.OK;
-                return null;
-            }
-
-            byte[] buffer;
-
-            if (request.QueryString["method"] != null)
-            {
-                //                MainConsole.Instance.Debug("[BASE HTTP SERVER]: Contains Method");
-                string method = request.QueryString["method"];
-                //                MainConsole.Instance.Debug("[BASE HTTP SERVER]: " + requestBody);
-                IStreamedRequestHandler streamProcessor;
-                if (TryGetStreamHTTPHandler(method, out streamProcessor) ||
-                         TryGetStreamHTTPHandler(request.RawUrl, out streamProcessor))
-                {
-                    buffer = streamProcessor.Handle(request.RawUrl, request.InputStream, request, response);
-                }
-                else
-                {
-                    //                    MainConsole.Instance.Warn("[BASE HTTP SERVER]: Handler Not Found");
-                    buffer = GetHTML404(response);
-                }
-            }
-            else
-            {
-                IStreamedRequestHandler streamProcessor;
-                if (TryGetStreamHTTPHandler(request.Url.AbsolutePath, out streamProcessor))
-                {
-                    buffer = streamProcessor.Handle(request.Url.AbsolutePath, request.InputStream, request, response);
-                }
-                else
-                {
-                    //                    MainConsole.Instance.Warn("[BASE HTTP SERVER]: Handler Not Found2");
-                    buffer = GetHTML404(response);
-                }
-            }
-
-            return buffer;
-        }
-
         /// <summary>
         ///     Try all the registered xmlrpc handlers when an xmlrpc request is received.
         ///     Sends back an XMLRPC unknown request response if no handler is registered for the requested method.
@@ -596,10 +428,8 @@ namespace Aurora.Framework.Servers.HttpServer
         /// <param name="response"></param>
         private byte[] HandleXmlRpcRequests(OSHttpRequest request, OSHttpResponse response)
         {
-            Stream requestStream = request.InputStream;
-            string requestBody = requestStream.ReadUntilEnd();
-            requestStream.Close();
-            //MainConsole.Instance.Debug(requestBody);
+            string requestBody = HttpServerHandlerHelpers.ReadString(request.InputStream);
+
             requestBody = requestBody.Replace("<base64></base64>", "");
             string responseString = String.Empty;
             XmlRpcRequest xmlRprcRequest = null;
@@ -796,12 +626,6 @@ namespace Aurora.Framework.Servers.HttpServer
             //MainConsole.Instance.DebugFormat("[BASE HTTP SERVER]: Removing handler key {0}", handlerKey);
 
             lock (m_streamHandlers) m_streamHandlers.Remove(handlerKey);
-        }
-
-        public void RemoveHttpStreamHandler(string path)
-        {
-            lock (m_HTTPStreamHandlers)
-                m_HTTPStreamHandlers.Remove(path);
         }
 
         public void RemovePollServiceHTTPHandler(string httpMethod, string path)

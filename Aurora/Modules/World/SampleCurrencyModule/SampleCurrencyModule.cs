@@ -161,6 +161,11 @@ namespace Aurora.Modules.SampleCurrencyModule
             return true;
         }
 
+        public bool Charge(UUID agentID, int amount, string text, TransactionType type)
+        {
+            return true;
+        }
+
         public bool ObjectGiveMoney(UUID objectID, UUID fromID, UUID toID, int amount)
         {
             return true;
@@ -194,7 +199,7 @@ namespace Aurora.Modules.SampleCurrencyModule
         }
 
         /// <summary>
-        ///     Sends the the stored money balance to the client
+        ///     Sends the stored money balance to the client
         /// </summary>
         /// <param name="client"></param>
         /// <param name="agentID"></param>
@@ -237,7 +242,7 @@ namespace Aurora.Modules.SampleCurrencyModule
 
             quoteResponse.Add("success", false);
             quoteResponse.Add("errorMessage", "Invalid parameters passed to the quote box");
-            quoteResponse.Add("errorURI", "http://www.opensimulator.org/wiki");
+            quoteResponse.Add("errorURI", "http://aurora-sim.org/wiki");
             returnval.Value = quoteResponse;
             return returnval;
         }
@@ -321,11 +326,6 @@ namespace Aurora.Modules.SampleCurrencyModule
                                          0, 0, 0, 0, 0,
                                          0, 0, 0, 0, 0,
                                          0, 0);
-        }
-
-        public bool Charge(IClientAPI client, int amount)
-        {
-            return true;
         }
 
         #endregion
