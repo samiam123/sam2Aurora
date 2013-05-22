@@ -51,6 +51,12 @@ namespace Aurora.ScriptEngine.AuroraDotNetEngine.CompilerTools
             m_compiler = compiler;
             new CSCodeGenerator(compiler);
             //            LSL_Converter = new CSCodeGenerator(null, compiler);
+
+            //Add new LSL events that haven't been added into the parser
+            LSL2CSCodeTransformer.AddLSLEvent(new EventInfo("transaction_result", new [] {
+                "LSL_Types.LSLString", "LSL_Types.LSLInteger", "LSL_Types.LSLString" }));
+            LSL2CSCodeTransformer.AddLSLEvent(new EventInfo("path_update", new [] {
+                "LSL_Types.LSLInteger", "LSL_Types.list" }));
         }
 
         public void Convert(string Script, out string CompiledScript,
