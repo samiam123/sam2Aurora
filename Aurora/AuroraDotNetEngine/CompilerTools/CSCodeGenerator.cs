@@ -317,8 +317,7 @@ namespace Aurora.ScriptEngine.AuroraDotNetEngine.CompilerTools
                 foreach (string nameSpace in api.NamespaceAdditions)
                     sb.AppendFormat("using {0};\n", nameSpace);
             sb.AppendLine(
-@"using Aurora.ScriptEngine.AuroraDotNetEngine.APIs.Interfaces;
-using LSL_Types = Aurora.ScriptEngine.AuroraDotNetEngine.LSL_Types;
+@"using LSL_Types = Aurora.ScriptEngine.AuroraDotNetEngine.LSL_Types;
 using System;
 namespace Script
 {
@@ -2514,7 +2513,7 @@ default
             retVal.Append(GenerateLine("try", null));
             retVal.Append(GenerateLine("{", null));
             retVal.Append(Generate(
-                String.Format("((ILSL_Api)m_apis[\"ll\"]).state(\"{0}\");", sc.NewState)
+                String.Format("((dynamic)m_apis[\"ll\"]).state(\"{0}\");", sc.NewState)
                 , sc));
             retVal.Append(GenerateLine("}", null));
             retVal.Append(GenerateLine("catch", null));
@@ -2955,8 +2954,7 @@ default
             if (m_apiFunctions.ContainsKey(CheckName(fc.Id)))
             {
                 //Add the m_apis link
-                fc.Id = String.Format("(({0})m_apis[\"{1}\"]).{2}",
-                                      m_apiFunctions[CheckName(fc.Id)].InterfaceName,
+                fc.Id = String.Format("((dynamic)m_apis[\"{0}\"]).{1}",
                                       m_apiFunctions[CheckName(fc.Id)].Name, fc.Id);
             }
 
